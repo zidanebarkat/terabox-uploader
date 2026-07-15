@@ -13,6 +13,10 @@ on:
         description: Task ID for tracking
         required: false
         default: ''
+      cookies_b64:
+        description: Base64-encoded or raw cookies.txt for YouTube (optional, improves reliability)
+        required: false
+        default: ''
       terabox_ndus:
         description: TeraBox NDUS cookie
         required: false
@@ -54,12 +58,26 @@ jobs:
           cd ~/bgutil-ytdlp-pot-provider/server && npm ci && npx tsc
           ls ~/bgutil-ytdlp-pot-provider/server/build/main.js && echo "bgutil build OK"
 
+      - name: Setup cookies
+        if: ${{ inputs.cookies_b64 != '' }}
+        run: |
+          RAW="${{ inputs.cookies_b64 }}"
+          if echo "$RAW" | base64 -d &>/dev/null && echo "$RAW" | base64 -d 2>/dev/null | head -1 | grep -qi 'netscape\|#.*cookie'; then
+            echo "$RAW" | base64 -d > cookies.txt
+          elif echo "$RAW" | head -1 | grep -qi 'netscape\|#.*cookie'; then
+            echo "$RAW" > cookies.txt
+          else
+            echo "$RAW" | base64 -d > cookies.txt 2>/dev/null || echo "$RAW" > cookies.txt
+          fi
+          echo "Cookies saved ($(wc -c < cookies.txt) bytes)"
+
       - name: Upload to TeraBox
         id: upload
         env:
           TASK_ID: ${{ inputs.task_id }}
           URL: ${{ inputs.url }}
           QUALITY: ${{ inputs.quality }}
+          COOKIES_B64: ${{ inputs.cookies_b64 }}
           TERABOX_NDUS: ${{ inputs.terabox_ndus || secrets.TERABOX_NDUS }}
           TERABOX_NDUT_FMT: ${{ inputs.terabox_ndut_fmt || secrets.TERABOX_NDUT_FMT }}
           TERABOX_CSRF: ${{ inputs.terabox_csrf || secrets.TERABOX_CSRF }}

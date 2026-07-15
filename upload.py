@@ -119,9 +119,26 @@ def main():
 
     env = os.environ.copy()
 
+    # Decode cookies if provided via COOKIES_B64 env var
+    cookies_b64 = os.environ.get('COOKIES_B64', '').strip()
+    cookies_flag = ''
+    if cookies_b64:
+        import base64
+        cookie_path = '/tmp/yt_cookies.txt'
+        try:
+            decoded = base64.b64decode(cookies_b64).decode('utf-8', errors='replace')
+            if not decoded.lstrip().startswith('# Netscape'):
+                decoded = cookies_b64  # already raw
+        except Exception:
+            decoded = cookies_b64
+        with open(cookie_path, 'w') as f:
+            f.write(decoded)
+        cookies_flag = f'--cookies {cookie_path}'
+        log(f"Cookies loaded ({len(decoded)} bytes)")
+
     # Step 1: Get video info
     log("Getting video info...")
-    info_cmd = f'yt-dlp --js-runtimes node --impersonate chrome -j --no-warnings --extractor-args "youtube:player_client=web;fetch_pot=always" "{url}"'
+    info_cmd = f'yt-dlp --js-runtimes node --impersonate chrome -j --no-warnings --extractor-args "youtube:player_client=web;fetch_pot=always" {cookies_flag} "{url}"'
     info_proc = subprocess.run(info_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
     try:
         info = json.loads(info_proc.stdout.strip().split('\n')[0])
@@ -137,6 +154,7 @@ def main():
     dl_cmd = (
         f'yt-dlp --js-runtimes node --impersonate chrome --socket-timeout 30 '
         f'--extractor-args "youtube:player_client=web;fetch_pot=always" '
+        f'{cookies_flag} '
         f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
         f'--newline -o "{output_path}" --no-part "{url}"'
     )
