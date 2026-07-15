@@ -155,17 +155,22 @@ def main():
         f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
         f'--newline -o "{output_path}" --no-part {cookies_flag} "{url}"'
     )
+    log(f"CMD: {dl_cmd[:200]}")
     proc = subprocess.Popen(dl_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True, bufsize=1, env=env)
+    output_lines = []
     for line in proc.stdout:
         line = line.strip()
+        output_lines.append(line)
         match = re.search(r'\[download\]\s+([\d.]+)%', line)
         if match:
             log(f"Download: {match.group(1)}%")
     proc.wait()
 
     if proc.returncode != 0 or not os.path.exists(output_path):
-        log("ERROR: Download failed")
+        tail = '\n'.join(output_lines[-20:])
+        log(f"ERROR: Download failed (rc={proc.returncode})")
+        log(f"yt-dlp output:\n{tail}")
         sys.exit(1)
 
     file_mb = round(os.path.getsize(output_path) / 1024 / 1024, 1)
