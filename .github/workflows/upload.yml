@@ -53,7 +53,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends ffmpeg curl unzip
-          pip install -q yt-dlp requests
+          pip install -q yt-dlp requests curl_cffi
           curl -fsSL https://deno.land/install.sh | sh || true
           echo "$HOME/.deno/bin" >> $GITHUB_PATH
 

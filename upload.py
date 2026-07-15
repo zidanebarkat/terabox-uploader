@@ -132,9 +132,11 @@ def main():
     if os.path.exists('cookies.txt'):
         cookies_flag = '--cookies cookies.txt'
 
+    YTDLP_BYPASS = '--impersonate chrome --remote-components ejs:github --extractor-args "youtube:player_client=web"'
+
     # Step 1: Get video info
     log("Getting video info...")
-    info_cmd = f'yt-dlp --no-check-certificates -j --no-warnings {cookies_flag} "{url}"'
+    info_cmd = f'yt-dlp --no-check-certificates -j --no-warnings {YTDLP_BYPASS} {cookies_flag} "{url}"'
     info_proc = subprocess.run(info_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
     try:
         info = json.loads(info_proc.stdout.strip().split('\n')[0])
@@ -149,6 +151,7 @@ def main():
     log(f"Downloading @ {quality}...")
     dl_cmd = (
         f'yt-dlp --no-check-certificates --socket-timeout 30 '
+        f'{YTDLP_BYPASS} '
         f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
         f'--newline -o "{output_path}" --no-part {cookies_flag} "{url}"'
     )
