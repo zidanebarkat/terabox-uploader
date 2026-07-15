@@ -1,0 +1,108 @@
+name: Upload to TeraBox
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: YouTube URL to upload
+        required: true
+      quality:
+        description: Video quality (360p, 480p, 720p, 1080p, best)
+        required: false
+        default: '720p'
+      task_id:
+        description: Task ID for tracking
+        required: false
+        default: ''
+      cookies_b64:
+        description: Base64-encoded cookies.txt for YouTube
+        required: false
+        default: ''
+      terabox_ndus:
+        description: TeraBox NDUS cookie
+        required: false
+        default: ''
+      terabox_ndut_fmt:
+        description: TeraBox NDUT_FMT cookie
+        required: false
+        default: ''
+      terabox_csrf:
+        description: TeraBox csrf token
+        required: false
+        default: ''
+      terabox_browserid:
+        description: TeraBox browserid cookie
+        required: false
+        default: ''
+      terabox_jstoken:
+        description: TeraBox jsToken
+        required: false
+        default: ''
+      terabox_remote_dir:
+        description: TeraBox remote directory
+        required: false
+        default: '/stream_videos'
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg curl unzip
+          pip install -q yt-dlp requests
+          curl -fsSL https://deno.land/install.sh | sh || true
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
+
+      - name: Setup cookies
+        run: |
+          RAW="${{ inputs.cookies_b64 }}"
+          if [ -n "$RAW" ]; then
+            if echo "$RAW" | base64 -d &>/dev/null && echo "$RAW" | base64 -d 2>/dev/null | head -1 | grep -qi 'netscape\|#.*cookie'; then
+              echo "$RAW" | base64 -d > cookies.txt
+              echo "Cookies decoded ($(wc -c < cookies.txt) bytes)"
+            elif echo "$RAW" | head -1 | grep -qi 'netscape\|#.*cookie'; then
+              echo "$RAW" > cookies.txt
+              echo "Cookies used as raw ($(wc -c < cookies.txt) bytes)"
+            else
+              echo "$RAW" | base64 -d > cookies.txt 2>/dev/null || echo "$RAW" > cookies.txt
+              echo "Cookies saved ($(wc -c < cookies.txt) bytes)"
+            fi
+            echo "COOKIES=--cookies cookies.txt" >> $GITHUB_ENV
+          else
+            echo "COOKIES=" >> $GITHUB_ENV
+            echo "No cookies provided"
+          fi
+
+      - name: Upload to TeraBox
+        id: upload
+        env:
+          TASK_ID: ${{ inputs.task_id }}
+          URL: ${{ inputs.url }}
+          QUALITY: ${{ inputs.quality }}
+          TERABOX_NDUS: ${{ inputs.terabox_ndus || secrets.TERABOX_NDUS }}
+          TERABOX_NDUT_FMT: ${{ inputs.terabox_ndut_fmt || secrets.TERABOX_NDUT_FMT }}
+          TERABOX_CSRF: ${{ inputs.terabox_csrf || secrets.TERABOX_CSRF }}
+          TERABOX_BROWSERID: ${{ inputs.terabox_browserid || secrets.TERABOX_BROWSERID }}
+          TERABOX_JSTOKEN: ${{ inputs.terabox_jstoken || secrets.TERABOX_JSTOKEN }}
+          TERABOX_REMOTE_DIR: ${{ inputs.terabox_remote_dir || secrets.TERABOX_REMOTE_DIR || '/stream_videos' }}
+        run: |
+          python3 ${{ github.workspace }}/upload.py
+          if [ -f /tmp/tb_result.json ]; then
+            SHARE_URL=$(python3 -c "import json; d=json.load(open('/tmp/tb_result.json')); print(d.get('share_url',''))")
+            echo "share_url=$SHARE_URL" >> "$GITHUB_OUTPUT"
+            echo "=== DONE: $SHARE_URL ==="
+          else
+            echo "ERROR: No result file"
+            exit 1
+          fi
+
+      - name: Print result
+        run: |
+          echo "========================================"
+          echo "TeraBox upload complete!"
+          echo "Share URL: ${{ steps.upload.outputs.share_url }}"
+          echo "========================================"
