@@ -6,12 +6,6 @@ from urllib.parse import quote_plus
 def log(msg):
     print(f"[{time.strftime('%H:%M:%S')}] {msg}", flush=True)
 
-def find_deno():
-    for p in [os.path.expanduser('~/.deno/bin/deno'), '/usr/local/bin/deno', '/root/.deno/bin/deno']:
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-    return None
-
 # --- TeraBox config ---
 NDUS = os.environ.get('TERABOX_NDUS', '')
 NDUT_FMT = os.environ.get('TERABOX_NDUT_FMT', '')
@@ -124,19 +118,10 @@ def main():
     fmt = QUALITY_MAP.get(quality, QUALITY_MAP['720p'])
 
     env = os.environ.copy()
-    deno = find_deno()
-    if deno:
-        env['PATH'] = os.path.dirname(deno) + ':' + env.get('PATH', '')
-
-    cookies_flag = ''
-    if os.path.exists('cookies.txt'):
-        cookies_flag = '--cookies cookies.txt'
-
-    YTDLP_BYPASS = '--impersonate chrome --remote-components ejs:github --extractor-args "youtube:player_client=web"'
 
     # Step 1: Get video info
     log("Getting video info...")
-    info_cmd = f'yt-dlp --no-check-certificates -j --no-warnings {YTDLP_BYPASS} {cookies_flag} "{url}"'
+    info_cmd = f'yt-dlp -j --no-warnings "{url}"'
     info_proc = subprocess.run(info_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
     try:
         info = json.loads(info_proc.stdout.strip().split('\n')[0])
@@ -150,10 +135,9 @@ def main():
     output_path = f'/tmp/{task_id}.mp4'
     log(f"Downloading @ {quality}...")
     dl_cmd = (
-        f'yt-dlp --no-check-certificates --socket-timeout 30 '
-        f'{YTDLP_BYPASS} '
+        f'yt-dlp --socket-timeout 30 '
         f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
-        f'--newline -o "{output_path}" --no-part {cookies_flag} "{url}"'
+        f'--newline -o "{output_path}" --no-part "{url}"'
     )
     log(f"CMD: {dl_cmd[:200]}")
     proc = subprocess.Popen(dl_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
