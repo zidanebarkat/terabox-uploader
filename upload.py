@@ -117,9 +117,9 @@ def main():
 
     QUALITY_MAP = {
         '360p': 'best[height<=360]',
-        '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]',
-        '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
-        '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+        '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]/best',
+        '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
+        '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]/best',
         'best': 'bestvideo+bestaudio/best',
     }
     fmt = QUALITY_MAP.get(quality, QUALITY_MAP['720p'])
