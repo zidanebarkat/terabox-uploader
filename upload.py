@@ -141,7 +141,10 @@ def main():
         with open(cookie_path, 'w') as f:
             f.write(decoded)
         cookies_flag = f'--cookies {cookie_path}'
-        log(f"Cookies loaded ({len(decoded)} bytes)")
+        # Show first cookie line for debugging
+        first_cookie = [l for l in decoded.split('\n') if l and not l.startswith('#')][:1]
+        log(f"Cookies loaded ({len(decoded)} bytes), first cookie: {first_cookie[0][:60] if first_cookie else 'NONE'}...")
+        log(f"Cookies file written to {cookie_path}")
 
     # Step 1: Get video info
     log("Getting video info...")
