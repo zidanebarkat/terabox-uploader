@@ -167,9 +167,11 @@ def main():
     if cookies_b64:
         try:
             import base64
-            cookie_data = base64.b64decode(cookies_b64)
-            req.post(f'{RENDER_PROXY}/api/upload_cookies', data=cookie_data,
-                     headers={'Content-Type': 'text/plain'}, timeout=15)
+            decoded = base64.b64decode(cookies_b64).decode('utf-8', errors='replace')
+            if not decoded.lstrip().startswith('#'):
+                decoded = cookies_b64
+            req.post(f'{RENDER_PROXY}/api/upload_cookies',
+                     json={'cookies': decoded}, timeout=15)
             log("Cookies pushed to Render proxy")
         except Exception as e:
             log(f"Cookie push failed: {e}")
