@@ -148,7 +148,7 @@ def main():
 
     # Step 1: Get video info
     log("Getting video info...")
-    info_cmd = f'yt-dlp --js-runtimes node --impersonate chrome --remote-components ejs:github -j --no-warnings --extractor-args "youtube:player_client=web;fetch_pot=always" {cookies_flag} "{url}"'
+    info_cmd = f'yt-dlp --js-runtimes deno --impersonate chrome --remote-components ejs:github -j --no-warnings --extractor-args "youtube:player_client=web;fetch_pot=always" {cookies_flag} "{url}"'
     info_proc = subprocess.run(info_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
     try:
         info = json.loads(info_proc.stdout.strip().split('\n')[0])
@@ -164,7 +164,7 @@ def main():
 
     # List available formats for debugging
     list_cmd = (
-        f'yt-dlp --js-runtimes node --impersonate chrome --remote-components ejs:github '
+        f'yt-dlp --js-runtimes deno --impersonate chrome --remote-components ejs:github '
         f'--extractor-args "youtube:player_client=web;fetch_pot=always" '
         f'--list-formats {cookies_flag} "{url}"'
     )
@@ -174,7 +174,7 @@ def main():
             log(f"FORMAT: {line}")
 
     dl_cmd = (
-        f'yt-dlp --js-runtimes node --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
+        f'yt-dlp --js-runtimes deno --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
         f'--extractor-args "youtube:player_client=web;fetch_pot=always" '
         f'{cookies_flag} '
         f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
