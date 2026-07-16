@@ -116,11 +116,11 @@ def main():
     CHUNK_SIZE = 120 * 1024 * 1024
 
     QUALITY_MAP = {
-        '360p': 'bestvideo[height<=360]+bestaudio',
-        '480p': 'bestvideo[height<=480]+bestaudio',
-        '720p': 'bestvideo[height<=720]+bestaudio',
-        '1080p': 'bestvideo[height<=1080]+bestaudio',
-        'best': 'bestvideo+bestaudio',
+        '360p': 'best[height<=360]',
+        '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]',
+        '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
+        '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
+        'best': 'bestvideo+bestaudio/best',
     }
     fmt = QUALITY_MAP.get(quality, QUALITY_MAP['720p'])
 
@@ -194,9 +194,25 @@ def main():
 
     if proc.returncode != 0 or not os.path.exists(output_path):
         tail = '\n'.join(output_lines[-20:])
-        log(f"ERROR: Download failed (rc={proc.returncode})")
-        log(f"yt-dlp output:\n{tail}")
-        sys.exit(1)
+        log(f"WARNING: Format '{fmt}' failed, trying fallback 'best'...")
+        dl_cmd2 = (
+            f'yt-dlp --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
+            f'--extractor-args "youtube:player_client=web" '
+            f'{cookies_flag} '
+            f'-f "best" --merge-output-format mp4 --remux-video mp4 '
+            f'--newline -o "{output_path}" --no-part "{url}"'
+        )
+        proc2 = subprocess.Popen(dl_cmd2, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True, bufsize=1, env=env)
+        for line in proc2.stdout:
+            line = line.strip()
+            match = re.search(r'\[download\]\s+([\d.]+)%', line)
+            if match:
+                log(f"Download: {match.group(1)}%")
+        proc2.wait()
+        if proc2.returncode != 0 or not os.path.exists(output_path):
+            log(f"ERROR: Download failed even with fallback")
+            sys.exit(1)
 
     file_mb = round(os.path.getsize(output_path) / 1024 / 1024, 1)
     log(f"Download complete: {file_mb}MB")
