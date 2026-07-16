@@ -158,6 +158,18 @@ def main():
     # Step 2: Download via yt-dlp
     output_path = f'/tmp/{task_id}.mp4'
     log(f"Downloading @ {quality}...")
+
+    # List available formats for debugging
+    list_cmd = (
+        f'yt-dlp --js-runtimes node --impersonate chrome --remote-components ejs:github '
+        f'--extractor-args "youtube:player_client=web;fetch_pot=always" '
+        f'--list-formats {cookies_flag} "{url}"'
+    )
+    list_proc = subprocess.run(list_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
+    if list_proc.stdout:
+        for line in list_proc.stdout.strip().split('\n')[-15:]:
+            log(f"FORMAT: {line}")
+
     dl_cmd = (
         f'yt-dlp --js-runtimes node --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
         f'--extractor-args "youtube:player_client=web;fetch_pot=always" '
