@@ -158,61 +158,108 @@ def main():
     except:
         title = 'Unknown'
 
-    # Step 2: Download via yt-dlp
+    # Step 2: Download via Render.com proxy (residential IPs = 720p DASH)
     output_path = f'/tmp/{task_id}.mp4'
-    log(f"Downloading @ {quality}...")
+    RENDER_PROXY = os.environ.get('RENDER_PROXY', 'https://yt-proxy-2j0r.onrender.com')
+    log(f"Downloading @ {quality} via Render proxy...")
 
-    # List available formats for debugging
-    list_cmd = (
-        f'yt-dlp --impersonate chrome --remote-components ejs:github '
-        f'--extractor-args "youtube:player_client=web" '
-        f'--list-formats {cookies_flag} "{url}"'
-    )
-    list_proc = subprocess.run(list_cmd, shell=True, capture_output=True, text=True, timeout=60, env=env)
-    if list_proc.stdout:
-        for line in list_proc.stdout.strip().split('\n')[-15:]:
-            log(f"FORMAT: {line}")
+    # Push cookies to Render proxy
+    if cookies_b64:
+        try:
+            import base64
+            cookie_data = base64.b64decode(cookies_b64)
+            req.post(f'{RENDER_PROXY}/api/upload_cookies', data=cookie_data,
+                     headers={'Content-Type': 'text/plain'}, timeout=15)
+            log("Cookies pushed to Render proxy")
+        except Exception as e:
+            log(f"Cookie push failed: {e}")
 
-    dl_cmd = (
-        f'yt-dlp --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
-        f'--extractor-args "youtube:player_client=web" '
-        f'{cookies_flag} '
-        f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
-        f'--newline -o "{output_path}" --no-part "{url}"'
-    )
-    log(f"CMD: {dl_cmd[:200]}")
-    proc = subprocess.Popen(dl_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                            text=True, bufsize=1, env=env)
-    output_lines = []
-    for line in proc.stdout:
-        line = line.strip()
-        output_lines.append(line)
-        match = re.search(r'\[download\]\s+([\d.]+)%', line)
-        if match:
-            log(f"Download: {match.group(1)}%")
-    proc.wait()
+    # Start download on Render proxy
+    dl_task_id = None
+    try:
+        r = req.post(f'{RENDER_PROXY}/api/download',
+                     json={'url': url, 'quality': quality}, timeout=30)
+        resp = r.json()
+        if resp.get('ok'):
+            dl_task_id = resp['task_id']
+            log(f"Render proxy download started: task_id={dl_task_id}")
+        else:
+            log(f"Render proxy error: {resp.get('error', 'unknown')}")
+    except Exception as e:
+        log(f"Render proxy request failed: {e}")
 
-    if proc.returncode != 0 or not os.path.exists(output_path):
-        tail = '\n'.join(output_lines[-20:])
-        log(f"WARNING: Format '{fmt}' failed, trying fallback 'best'...")
-        dl_cmd2 = (
+    # Fallback: direct yt-dlp on GH Actions (will be 360p on datacenter IPs)
+    if not dl_task_id:
+        log("WARNING: Render proxy unavailable, falling back to direct yt-dlp (may be 360p)")
+        dl_cmd = (
             f'yt-dlp --impersonate chrome --remote-components ejs:github --socket-timeout 30 '
             f'--extractor-args "youtube:player_client=web" '
             f'{cookies_flag} '
-            f'-f "best" --merge-output-format mp4 --remux-video mp4 '
+            f'-f "{fmt}" --merge-output-format mp4 --remux-video mp4 '
             f'--newline -o "{output_path}" --no-part "{url}"'
         )
-        proc2 = subprocess.Popen(dl_cmd2, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen(dl_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                 text=True, bufsize=1, env=env)
-        for line in proc2.stdout:
+        for line in proc.stdout:
             line = line.strip()
             match = re.search(r'\[download\]\s+([\d.]+)%', line)
             if match:
                 log(f"Download: {match.group(1)}%")
-        proc2.wait()
-        if proc2.returncode != 0 or not os.path.exists(output_path):
-            log(f"ERROR: Download failed even with fallback")
+        proc.wait()
+        if proc.returncode != 0 or not os.path.exists(output_path):
+            log("ERROR: Direct download also failed")
             sys.exit(1)
+    else:
+        # Poll Render proxy until download completes
+        for attempt in range(120):
+            time.sleep(5)
+            try:
+                r = req.get(f'{RENDER_PROXY}/api/progress/{dl_task_id}', timeout=10)
+                prog = r.json()
+                if not prog.get('ok'):
+                    log(f"Progress error: {prog.get('error', 'unknown')}")
+                    continue
+                status = prog.get('status', 'unknown')
+                pct = prog.get('percent', 0)
+                speed = prog.get('speed', '')
+                eta = prog.get('eta', '')
+                if status == 'done':
+                    log("Render proxy download complete!")
+                    break
+                elif status in ('error', 'failed'):
+                    log(f"Render proxy download failed: {prog}")
+                    sys.exit(1)
+                if attempt % 6 == 0:
+                    log(f"Download: {pct}% {speed} ETA {eta}")
+            except Exception as e:
+                log(f"Poll error: {e}")
+        else:
+            log("ERROR: Render proxy download timed out (10 min)")
+            sys.exit(1)
+
+        # Download the .mp4 from Render proxy
+        video_url = f'{RENDER_PROXY}/video/{dl_task_id}.mp4'
+        log(f"Fetching video from {video_url}...")
+        try:
+            r = req.get(video_url, stream=True, timeout=600)
+            r.raise_for_status()
+            total = int(r.headers.get('content-length', 0))
+            downloaded = 0
+            with open(output_path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=1024*1024):
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total:
+                        pct = round(downloaded / total * 100, 1)
+                        if downloaded % (10*1024*1024) < 1024*1024:
+                            log(f"Fetching: {pct}%")
+        except Exception as e:
+            log(f"ERROR: Failed to fetch video from Render proxy: {e}")
+            sys.exit(1)
+
+    if not os.path.exists(output_path):
+        log("ERROR: Download file not found")
+        sys.exit(1)
 
     file_mb = round(os.path.getsize(output_path) / 1024 / 1024, 1)
     log(f"Download complete: {file_mb}MB")
