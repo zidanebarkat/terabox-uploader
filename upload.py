@@ -96,6 +96,13 @@ def terabox_share(cloud_path):
                           'Referer': 'https://www.terabox.com/main',
                           'Content-Type': 'application/x-www-form-urlencoded'},
                  cookies=COOKIES, data=data, timeout=30)
+    log(f"Share response: status={r.status_code}, len={len(r.text)}")
+    if not r.text.strip():
+        log(f"Share failed: empty response (status={r.status_code})")
+        log(f"Share request cookies: {list(COOKIES.keys())}")
+        log(f"Share request jsToken: {JSTOKEN[:20]}..." if JSTOKEN else "Share request jsToken: EMPTY")
+        log(f"Share cloud_path: {cloud_path}")
+        raise Exception(f"Share failed: empty response (status={r.status_code})")
     resp = r.json()
     if resp.get('errno', -1) != 0:
         raise Exception(f"Share failed: {resp}")
