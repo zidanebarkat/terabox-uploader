@@ -116,11 +116,11 @@ def main():
     CHUNK_SIZE = 120 * 1024 * 1024
 
     QUALITY_MAP = {
-        '360p': 'bestvideo[height<=360]+bestaudio/best[height<=360]',
-        '480p': 'bestvideo[height<=480]+bestaudio/best[height<=480]',
-        '720p': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
-        '1080p': 'bestvideo[height<=1080]+bestaudio/best[height<=1080]',
-        'best': 'bestvideo+bestaudio/best',
+        '360p': 'bestvideo[height<=360]+bestaudio',
+        '480p': 'bestvideo[height<=480]+bestaudio',
+        '720p': 'bestvideo[height<=720]+bestaudio',
+        '1080p': 'bestvideo[height<=1080]+bestaudio',
+        'best': 'bestvideo+bestaudio',
     }
     fmt = QUALITY_MAP.get(quality, QUALITY_MAP['720p'])
 
